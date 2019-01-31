@@ -25,14 +25,20 @@ class ShaderProgram {
   attrNor: number;
   attrCol: number;
 
+  id: number;
+
   unifModel: WebGLUniformLocation;
   unifModelInvTr: WebGLUniformLocation;
   unifViewProj: WebGLUniformLocation;
   unifColor: WebGLUniformLocation;
   unifPlanePos: WebGLUniformLocation;
+  unifFire: WebGLUniformLocation;
+  unifDaytime: WebGLUniformLocation;
 
-  constructor(shaders: Array<Shader>) {
+  constructor(shaders: Array<Shader>, id: number) {
     this.prog = gl.createProgram();
+
+    this.id = id;
 
     for (let shader of shaders) {
       gl.attachShader(this.prog, shader.shader);
@@ -49,6 +55,8 @@ class ShaderProgram {
     this.unifModelInvTr = gl.getUniformLocation(this.prog, "u_ModelInvTr");
     this.unifViewProj   = gl.getUniformLocation(this.prog, "u_ViewProj");
     this.unifPlanePos   = gl.getUniformLocation(this.prog, "u_PlanePos");
+    this.unifFire = gl.getUniformLocation(this.prog, "u_Fire");
+    this.unifDaytime = gl.getUniformLocation(this.prog, "u_Daytime");
   }
 
   use() {
@@ -83,6 +91,20 @@ class ShaderProgram {
     this.use();
     if (this.unifPlanePos !== -1) {
       gl.uniform2fv(this.unifPlanePos, pos);
+    }
+  }
+
+  setFireInfluence(fn: number) {
+    this.use();
+    if (this.unifFire !== -1) {
+      gl.uniform1f(this.unifFire, fn);
+    }
+  }
+
+  setTimeOfDay(t: number) {
+    this.use();
+    if (this.unifDaytime !== -1) {
+      gl.uniform1f(this.unifDaytime, t);
     }
   }
 

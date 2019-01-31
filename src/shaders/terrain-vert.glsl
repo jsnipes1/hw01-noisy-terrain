@@ -5,6 +5,7 @@ uniform mat4 u_Model;
 uniform mat4 u_ModelInvTr;
 uniform mat4 u_ViewProj;
 uniform vec2 u_PlanePos; // Our location in the virtual world displayed by the plane
+uniform float u_Fire;
 
 in vec4 vs_Pos;
 in vec4 vs_Nor;
@@ -16,21 +17,8 @@ out vec4 fs_Col;
 
 out float fs_Sine;
 
-float random1( vec2 p , vec2 seed) {
-  return fract(sin(dot(p + seed, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float random1( vec3 p , vec3 seed) {
-  return fract(sin(dot(p + seed, vec3(987.654, 123.456, 531.975))) * 85734.3545);
-}
-
-vec2 random2( vec2 p , vec2 seed) {
-  return fract(sin(vec2(dot(p + seed, vec2(311.7, 127.1)), dot(p + seed, vec2(269.5, 183.3)))) * 85734.3545);
-}
-
 // From Mariano's github
-float hash3D(vec3 x)
-{
+float hash3D(vec3 x) {
 	float i = dot(x, vec3(123.4031, 46.5244876, 91.106168));
 	return fract(sin(i * 7.13) * 268573.103291);
 }
@@ -76,35 +64,41 @@ float fbm(vec3 q) {
 }
 
 // From IQ
- float pattern( in vec3 p )
-  {
+ float pattern( in vec3 p ) {
     vec3 q = vec3( fbm( p + vec3(0.0) ),
                    fbm( p + vec3(5.2,1.3, 2.8) ),
                    fbm( p + vec3(1.2, 3.4, 1.2)) );
 
     return fbm( p + 4.0*q );
-  }
+ }
 
 // From IQ
-vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )
-{
+vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ) {
     return a + b*cos( 6.28318*(c*t+d) );
 }
 
+// From Rachel's slides
+float bias(float b, float t) {
+  return pow(t, log(b) / log(0.5));
+}
+
+// Color in quadrants
 vec3 getColor(int type, float t, out vec4 modelposition) {
   modelposition.y += pattern(vs_Pos.xyz / 8.0) * 10.0;
+  float defaultY = modelposition.y;
+
   vec3 a, b, c, d;
-   if (type == 0) {
-    //type = 0;
+  vec4 heights;
+  if (type == 0) {
     a = vec3(0.8);
     b = vec3(0.2);
     c = vec3(1.7, 0.0, 0.0);
     d = vec3(0.0, 0.0, 0.94);
     modelposition.y *= pow(abs(4.0 - modelposition.y * modelposition.y), 0.5) * 0.01 + 0.09 * fbm(vec3(modelposition.x, 0.0, modelposition.z));
+    heights[0] = modelposition.y;
   }
   // Q2: Water (Top right)
   else if (type == 1) {
-    //type = 1;
     a = vec3(0.5);
     b = vec3(0.5);
     c = vec3(1.0);
@@ -113,31 +107,54 @@ vec3 getColor(int type, float t, out vec4 modelposition) {
     if (modelposition.y > 1.5) {
       modelposition.y = 0.0;
     }
+    heights[1] = modelposition.y;
   }
   // Q3: Fire (Bottom right)
   else if (type == 2) {
-    //type = 2;
     a = vec3(0.5);
     b = vec3(0.5);
     c = vec3(1.0, 1.0, 0.5);
     d = vec3(0.8, 0.9, 0.3);
+    heights[2] = modelposition.y;
   }
   // Q4: Earth (Bottom left)
   else if (type == 3) {
-    //type = 3;
     a = vec3(0.35);
     b = vec3(0.4, 0.2, 0.4);
     c = vec3(1.0, 0.73, 0.68);
     d = vec3(0.10, 0.25, 0.17);
     modelposition.y *= 0.4;
-
     if (fbm(modelposition.xyz) < 0.3) { 
       modelposition.y *= 0.3;
     }
+    heights[3] = modelposition.y;
   }
   else {
     //modelposition.y = 0.0;
   }
+
+  float n = 10000.5;
+  if (abs(modelposition.x) <= n) {
+    float m = smoothstep(0.0, 1.0, abs(modelposition.x) / n);
+
+    modelposition.y = mix(heights[type], heights[(type + 1) % 4], bias(0.2, m));
+  }
+  if (abs(modelposition.z) <= n) {
+    float m = smoothstep(0.0, 1.0, abs(modelposition.z) / n);
+    modelposition.y = mix(heights[type], heights[(type + 1) % 4], bias(0.2, m));
+  }
+
+  // Recolor as the fire nation attacks
+  float u = u_Fire / 100.0;
+  u = smoothstep(0.0, 1.0, u_Fire / 100.0);
+
+  a = mix(a, vec3(0.5), u);
+  b = mix(b, vec3(0.5), u);
+  c = mix(c, vec3(1.0, 1.0, 0.5), u);
+  d = mix(d, vec3(0.8, 0.9, 0.3), u);
+  
+  modelposition.y = mix(modelposition.y, heights[2], u);
+
   return palette(t, a, b, c, d);
 }
 
@@ -146,10 +163,16 @@ int getType(in vec3 pos) {
   // Q1: Air (Top left)
   if (pos.x >= 0.0 && pos.z >= 0.0) {
     type = 0;
+    if (u_Fire > 25.0) {
+      type = 2;
+    }
   }
   // Q2: Water (Top right)
   else if (pos.x < 0.0 && pos.z >= 0.0) {
     type = 1;
+    if (u_Fire > 75.0) {
+      type = 2;
+    }
   }
   // Q3: Fire (Bottom right)
   else if (pos.x < 0.0 && pos.z < 0.0) {
@@ -158,12 +181,15 @@ int getType(in vec3 pos) {
   // Q4: Earth (Bottom left)
   else if (pos.x >= 0.0 && pos.z < 0.0) {
     type = 3;
+    if (u_Fire > 50.0) {
+      type = 2;
+    }
   }
   
   return type;
 }
 
-// Start by assuming the four nations still live together in harmony
+// Start by assuming the four nations still live together in harmony...
 void main()
 {
   fs_Pos = vs_Pos.xyz + vs_Nor.xyz * fbm(vs_Pos.xyz);
@@ -189,9 +215,9 @@ void main()
   float t = pattern(vs_Pos.xyz / 8.0);
 
   int type = getType(vs_Pos.xyz);
-  vec4 leftPos = floor(vs_Pos);
-  vec4 rightPos = leftPos + vec4(1.0, 0.0, 1.0, 0.0);
-  vec4 dist = fract(vs_Pos);
+  vec4 leftPos = floor(vs_Pos) - 0.2 * fbm(vec3(fbm(vec3(vs_Pos)))) * t;
+  vec4 rightPos = leftPos + vec4(1.0, 0.0, 1.0, 0.0) * -u_Fire * fbm(vec3(leftPos)) * t;
+  vec4 dist = fract(vs_Pos) * u_Fire;
   int leftType = getType(leftPos.xyz);
   int rightType = getType(rightPos.xyz);
 
@@ -202,17 +228,25 @@ void main()
     else {
       fs_Col = vec4(getColor(rightType, t, modelposition), 1.0);
     }
-    modelposition.y *= 0.5 * smoothstep(leftPos.y, rightPos.y, dist.x);
+
+    if (leftType == 2 || rightType == 2) {
+      vec4 attack = vec4(1.0, 0.0, 1.0, 0.0) * u_Fire;
+      leftPos -= attack;
+      rightPos += attack;
+    }
+
+    modelposition.y *= 0.5 * smoothstep(leftPos.y, rightPos.y, dist.z);
   }
   else {
     fs_Col = vec4(getColor(type, t, modelposition), 1.0);
   }
 
-  // Water nation snowy islands
+  // Water nation's snowy islands
   if (type == 1 && t > 0.2 && t < 0.35) { 
     fs_Col = vec4(1.0f);
     modelposition.y += 0.2;
   }
+
   modelposition = u_Model * modelposition;
   gl_Position = u_ViewProj * modelposition;
 }

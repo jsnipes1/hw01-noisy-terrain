@@ -13,6 +13,8 @@ import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
 const controls = {
   tesselations: 5,
   'Load Scene': loadScene, // A function pointer, essentially
+  timeOfDay: 0,
+  fireNationAttack: 0,
 };
 
 let square: Square;
@@ -22,6 +24,9 @@ let aPressed: boolean;
 let sPressed: boolean;
 let dPressed: boolean;
 let planePos: vec2;
+
+let currFire: number = 0;
+let currTime: number = 0;
 
 function loadScene() {
   square = new Square(vec3.fromValues(0, 0, 0));
@@ -82,6 +87,8 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
+  gui.add(controls, 'timeOfDay', 0, 23).step(1);
+  gui.add(controls, 'fireNationAttack', 0, 100).step(1);
 
   // get canvas and webgl context
   const canvas = <HTMLCanvasElement> document.getElementById('canvas');
@@ -105,12 +112,12 @@ function main() {
   const lambert = new ShaderProgram([
     new Shader(gl.VERTEX_SHADER, require('./shaders/terrain-vert.glsl')),
     new Shader(gl.FRAGMENT_SHADER, require('./shaders/terrain-frag.glsl')),
-  ]);
+  ], 0);
 
   const flat = new ShaderProgram([
     new Shader(gl.VERTEX_SHADER, require('./shaders/flat-vert.glsl')),
     new Shader(gl.FRAGMENT_SHADER, require('./shaders/flat-frag.glsl')),
-  ]);
+  ], 1);
 
   function processKeyPresses() {
     let velocity: vec2 = vec2.fromValues(0,0);
@@ -138,13 +145,15 @@ function main() {
     stats.begin();
     gl.viewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.clear();
+
     processKeyPresses();
+
     renderer.render(camera, lambert, [
       plane,
-    ]);
+    ], controls.fireNationAttack, controls.timeOfDay);
     renderer.render(camera, flat, [
       square,
-    ]);
+    ], controls.fireNationAttack, controls.timeOfDay);
     stats.end();
 
     // Tell the browser to call `tick` again whenever it renders a new frame
