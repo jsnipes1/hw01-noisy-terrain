@@ -76,7 +76,7 @@ float fbm(vec3 q) {
 
 void main()
 {
-  fs_Pos = vs_Pos.xyz + vs_Nor.xyz * 0.5 * fbm(vs_Pos.xyz);
+  fs_Pos = vs_Pos.xyz + vs_Nor.xyz * fbm(vs_Pos.xyz);
   fs_Col = vec4(fs_Pos, sqrt(fbm(vs_Nor.xyz) * fbm(fs_Pos.xyz)));
 
   fs_Sine = (sin((vs_Pos.x + u_PlanePos.x) * 0.1) + cos((vs_Pos.z + u_PlanePos.y) * 3.14159 * 0.1) + noise(vs_Pos.xyz)) * sqrt(noise(vec3(15.0, 10.0, 10.0) * noise(vs_Pos.xyz)));
