@@ -15,7 +15,6 @@ out vec4 out_Col; // This is the final output color that you will see on your
 void main()
 {
     float t = clamp(smoothstep(40.0, 50.0, length(fs_Pos)), -1.0, 1.0); // Distance fog
-    // out_Col = vec4(mix(vec3(0.5 * (fs_Sine + 1.0)), vec3(164.0 / 255.0, 233.0 / 255.0, 1.0), t), 1.0);
+    out_Col = vec4(mix(vec3(0.8 * (fs_Col + 0.2)), vec3(164.0 / 255.0, 233.0 / 255.0, 1.0), t), 1.0);
     // out_Col = vec4(mix(fs_Col, sin(u_PlanePos.x) * vec4(fs_Pos, 1.0), t));
-    out_Col = fs_Col;
 }
