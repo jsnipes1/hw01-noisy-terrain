@@ -84,7 +84,7 @@ float bias(float b, float t) {
 
 // Color in quadrants
 vec3 getColor(int type, float t, out vec4 modelposition) {
-  modelposition.y += pattern(vs_Pos.xyz / 8.0) * 10.0;
+  modelposition.y += pattern((vs_Pos.xyz + vec3(u_PlanePos.x, 0.0, u_PlanePos.y)) / 8.0) * 10.0;
   float defaultY = modelposition.y;
 
   vec3 a, b, c, d;
@@ -195,6 +195,8 @@ void main()
   fs_Pos = vs_Pos.xyz + vs_Nor.xyz * fbm(vs_Pos.xyz);
   fs_Col = vec4(fs_Pos, sqrt(fbm(vs_Nor.xyz) * fbm(fs_Pos.xyz)));
 
+  vec3 newPos = (vs_Pos.xyz + vec3(u_PlanePos.x, 0.0, u_PlanePos.y));
+
   // fs_Sine = (sin((vs_Pos.x + u_PlanePos.x) * 0.1) + cos((vs_Pos.z + u_PlanePos.y) * 3.14159 * 0.1) + noise(vs_Pos.xyz)) * sqrt(noise(vec3(15.0, 10.0, 10.0) * noise(vs_Pos.xyz)));
 
   // vec3 sineVec = vec3(sin(u_PlanePos.x), sin(u_PlanePos.y), cos(u_PlanePos.x + u_PlanePos.y));
@@ -209,15 +211,15 @@ void main()
   // }
   
   vec4 modelposition = vec4(vs_Pos.xyz, 1.0);
-  vec2 noise = vec2(fbm(vs_Pos.xyz / 8.0));
+  vec2 noise = vec2(fbm(newPos / 8.0));
   float noise2 = fbm(vec3(noise, 3.4012394958) + vec3(1.1293123213, 121.23, 123213.33));
   
-  float t = pattern(vs_Pos.xyz / 8.0);
+  float t = pattern(newPos / 8.0);
 
-  int type = getType(vs_Pos.xyz);
-  vec4 leftPos = floor(vs_Pos) - 0.2 * fbm(vec3(fbm(vec3(vs_Pos)))) * t;
+  int type = getType(newPos);
+  vec4 leftPos = vec4(floor(newPos) - 0.2 * fbm(vec3(fbm(vec3(newPos)))), 1.0) * t;
   vec4 rightPos = leftPos + vec4(1.0, 0.0, 1.0, 0.0) * -u_Fire * fbm(vec3(leftPos)) * t;
-  vec4 dist = fract(vs_Pos) * u_Fire;
+  vec4 dist = vec4(fract(newPos), 1.0) * u_Fire;
   int leftType = getType(leftPos.xyz);
   int rightType = getType(rightPos.xyz);
 
