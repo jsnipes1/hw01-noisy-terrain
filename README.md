@@ -4,7 +4,17 @@ Jake Snipes
 PennKey: jsnipes
 
 ## Images
+The four nations lived together in harmony...
+<img src="img/0.PNG">
 
+...but then...
+<img src="img/22.PNG">
+
+...everything changed...
+<img src="img/52.PNG">
+
+...when the Fire Nation attacked!
+<img src="img/100.PNG">
 
 ## Techniques
 - All terrain was generated with 3D FBM noise
