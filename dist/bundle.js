@@ -5980,6 +5980,8 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 const controls = {
     tesselations: 5,
     'Load Scene': loadScene,
+    timeOfDay: 0,
+    fireNationAttack: 0,
 };
 let square;
 let plane;
@@ -5988,6 +5990,8 @@ let aPressed;
 let sPressed;
 let dPressed;
 let planePos;
+let currFire = 0;
+let currTime = 0;
 function loadScene() {
     square = new __WEBPACK_IMPORTED_MODULE_3__geometry_Square__["a" /* default */](__WEBPACK_IMPORTED_MODULE_0_gl_matrix__["c" /* vec3 */].fromValues(0, 0, 0));
     square.create();
@@ -6042,6 +6046,8 @@ function main() {
     document.body.appendChild(stats.domElement);
     // Add controls to the gui
     const gui = new __WEBPACK_IMPORTED_MODULE_2_dat_gui__["GUI"]();
+    gui.add(controls, 'timeOfDay', 0, 23).step(1);
+    gui.add(controls, 'fireNationAttack', 0, 100).step(1);
     // get canvas and webgl context
     const canvas = document.getElementById('canvas');
     const gl = canvas.getContext('webgl2');
@@ -6060,11 +6066,11 @@ function main() {
     const lambert = new __WEBPACK_IMPORTED_MODULE_8__rendering_gl_ShaderProgram__["b" /* default */]([
         new __WEBPACK_IMPORTED_MODULE_8__rendering_gl_ShaderProgram__["a" /* Shader */](gl.VERTEX_SHADER, __webpack_require__(69)),
         new __WEBPACK_IMPORTED_MODULE_8__rendering_gl_ShaderProgram__["a" /* Shader */](gl.FRAGMENT_SHADER, __webpack_require__(70)),
-    ]);
+    ], 0);
     const flat = new __WEBPACK_IMPORTED_MODULE_8__rendering_gl_ShaderProgram__["b" /* default */]([
         new __WEBPACK_IMPORTED_MODULE_8__rendering_gl_ShaderProgram__["a" /* Shader */](gl.VERTEX_SHADER, __webpack_require__(71)),
         new __WEBPACK_IMPORTED_MODULE_8__rendering_gl_ShaderProgram__["a" /* Shader */](gl.FRAGMENT_SHADER, __webpack_require__(72)),
-    ]);
+    ], 1);
     function processKeyPresses() {
         let velocity = __WEBPACK_IMPORTED_MODULE_0_gl_matrix__["b" /* vec2 */].fromValues(0, 0);
         if (wPressed) {
@@ -6093,10 +6099,10 @@ function main() {
         processKeyPresses();
         renderer.render(camera, lambert, [
             plane,
-        ]);
+        ], controls.fireNationAttack, controls.timeOfDay);
         renderer.render(camera, flat, [
             square,
-        ]);
+        ], controls.fireNationAttack, controls.timeOfDay);
         stats.end();
         // Tell the browser to call `tick` again whenever it renders a new frame
         requestAnimationFrame(tick);
@@ -13241,7 +13247,7 @@ class OpenGLRenderer {
     clear() {
         __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].clear(__WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].COLOR_BUFFER_BIT | __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].DEPTH_BUFFER_BIT);
     }
-    render(camera, prog, drawables) {
+    render(camera, prog, drawables, fire, tod) {
         let model = __WEBPACK_IMPORTED_MODULE_0_gl_matrix__["a" /* mat4 */].create();
         let viewProj = __WEBPACK_IMPORTED_MODULE_0_gl_matrix__["a" /* mat4 */].create();
         let color = __WEBPACK_IMPORTED_MODULE_0_gl_matrix__["d" /* vec4 */].fromValues(1, 0, 0, 1);
@@ -13249,6 +13255,15 @@ class OpenGLRenderer {
         __WEBPACK_IMPORTED_MODULE_0_gl_matrix__["a" /* mat4 */].multiply(viewProj, camera.projectionMatrix, camera.viewMatrix);
         prog.setModelMatrix(model);
         prog.setViewProjMatrix(viewProj);
+        // Terrain shader
+        if (prog.id == 0) {
+            prog.setFireInfluence(fire);
+            prog.setTimeOfDay(tod);
+        }
+        // Background shader
+        else {
+            prog.setTimeOfDay(tod);
+        }
         for (let drawable of drawables) {
             prog.draw(drawable);
         }
@@ -16389,8 +16404,9 @@ class Shader {
 
 ;
 class ShaderProgram {
-    constructor(shaders) {
+    constructor(shaders, id) {
         this.prog = __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].createProgram();
+        this.id = id;
         for (let shader of shaders) {
             __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].attachShader(this.prog, shader.shader);
         }
@@ -16405,6 +16421,8 @@ class ShaderProgram {
         this.unifModelInvTr = __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].getUniformLocation(this.prog, "u_ModelInvTr");
         this.unifViewProj = __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].getUniformLocation(this.prog, "u_ViewProj");
         this.unifPlanePos = __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].getUniformLocation(this.prog, "u_PlanePos");
+        this.unifFire = __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].getUniformLocation(this.prog, "u_Fire");
+        this.unifDaytime = __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].getUniformLocation(this.prog, "u_Daytime");
     }
     use() {
         if (activeProgram !== this.prog) {
@@ -16436,6 +16454,18 @@ class ShaderProgram {
             __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].uniform2fv(this.unifPlanePos, pos);
         }
     }
+    setFireInfluence(fn) {
+        this.use();
+        if (this.unifFire !== -1) {
+            __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].uniform1f(this.unifFire, fn);
+        }
+    }
+    setTimeOfDay(t) {
+        this.use();
+        if (this.unifDaytime !== -1) {
+            __WEBPACK_IMPORTED_MODULE_1__globals__["a" /* gl */].uniform1f(this.unifDaytime, t);
+        }
+    }
     draw(d) {
         this.use();
         if (this.attrPos != -1 && d.bindPos()) {
@@ -16462,25 +16492,25 @@ class ShaderProgram {
 /* 69 */
 /***/ (function(module, exports) {
 
-module.exports = "#version 300 es\r\n\r\n\r\nuniform mat4 u_Model;\r\nuniform mat4 u_ModelInvTr;\r\nuniform mat4 u_ViewProj;\r\nuniform vec2 u_PlanePos; // Our location in the virtual world displayed by the plane\r\n\r\nin vec4 vs_Pos;\r\nin vec4 vs_Nor;\r\nin vec4 vs_Col;\r\n\r\nout vec3 fs_Pos;\r\nout vec4 fs_Nor;\r\nout vec4 fs_Col;\r\n\r\nout float fs_Sine;\r\n\r\nfloat random1( vec2 p , vec2 seed) {\r\n  return fract(sin(dot(p + seed, vec2(127.1, 311.7))) * 43758.5453);\r\n}\r\n\r\nfloat random1( vec3 p , vec3 seed) {\r\n  return fract(sin(dot(p + seed, vec3(987.654, 123.456, 531.975))) * 85734.3545);\r\n}\r\n\r\nvec2 random2( vec2 p , vec2 seed) {\r\n  return fract(sin(vec2(dot(p + seed, vec2(311.7, 127.1)), dot(p + seed, vec2(269.5, 183.3)))) * 85734.3545);\r\n}\r\n\r\n// From Mariano's github\r\nfloat hash3D(vec3 x)\r\n{\r\n\tfloat i = dot(x, vec3(123.4031, 46.5244876, 91.106168));\r\n\treturn fract(sin(i * 7.13) * 268573.103291);\r\n}\r\n\r\n// 3D noise\r\nfloat noise(vec3 p) {\r\n  vec3 bCorner = floor(p);\r\n  vec3 inCell = fract(p);\r\n\r\n  float bLL = hash3D(bCorner);\r\n  float bUL = hash3D(bCorner + vec3(0.0, 0.0, 1.0));\r\n  float bLR = hash3D(bCorner + vec3(0.0, 1.0, 0.0));\r\n  float bUR = hash3D(bCorner + vec3(0.0, 1.0, 1.0));\r\n  float b0 = mix(bLL, bUL, inCell.z);\r\n  float b1 = mix(bLR, bUR, inCell.z);\r\n  float b = mix(b0, b1, inCell.y);\r\n\r\n  vec3 fCorner = bCorner + vec3(1.0, 0.0, 0.0);\r\n  float fLL = hash3D(fCorner);\r\n  float fUL = hash3D(fCorner + vec3(0.0, 0.0, 1.0));\r\n  float fLR = hash3D(fCorner + vec3(0.0, 1.0, 0.0));\r\n  float fUR = hash3D(fCorner + vec3(0.0, 1.0, 1.0));\r\n  float f0 = mix(fLL, fUL, inCell.z);\r\n  float f1 = mix(fLR, fUR, inCell.z);\r\n  float f = mix(f0, f1, inCell.y);\r\n\r\n  return mix(b, f, inCell.x);\r\n}\r\n\r\nfloat fbm(vec3 q) {\r\n  float acc = 0.0;\r\n  float freqScale = 2.0;\r\n  float invScale = 1.0 / freqScale;\r\n  float freq = 1.0;\r\n  float amp = 1.0;\r\n\r\n  for (int i = 0; i < 5; ++i) {\r\n    freq *= freqScale;\r\n    amp *= invScale;\r\n    acc += noise(q * freq) * amp;\r\n  }\r\n  return acc;\r\n}\r\n\r\n// From IQ\r\n float pattern( in vec3 p )\r\n  {\r\n    vec3 q = vec3( fbm( p + vec3(0.0) ),\r\n                   fbm( p + vec3(5.2,1.3, 2.8) ),\r\n                   fbm( p + vec3(1.2, 3.4, 1.2)) );\r\n\r\n    return fbm( p + 4.0*q );\r\n  }\r\n\r\n// From IQ\r\nvec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d )\r\n{\r\n    return a + b*cos( 6.28318*(c*t+d) );\r\n}\r\n\r\nvec3 getColor(int type, float t, out vec4 modelposition) {\r\n  modelposition.y += pattern(vs_Pos.xyz / 8.0) * 10.0;\r\n  vec3 a, b, c, d;\r\n   if (type == 0) {\r\n    //type = 0;\r\n    a = vec3(0.8);\r\n    b = vec3(0.2);\r\n    c = vec3(1.7, 0.0, 0.0);\r\n    d = vec3(0.0, 0.0, 0.94);\r\n    modelposition.y *= pow(abs(4.0 - modelposition.y * modelposition.y), 0.5) * 0.01 + 0.09 * fbm(vec3(modelposition.x, 0.0, modelposition.z));\r\n  }\r\n  // Q2: Water (Top right)\r\n  else if (type == 1) {\r\n    //type = 1;\r\n    a = vec3(0.5);\r\n    b = vec3(0.5);\r\n    c = vec3(1.0);\r\n    d = vec3(0.0, 0.1, 0.2);\r\n    modelposition.y *= 4.0;\r\n    if (modelposition.y > 1.5) {\r\n      modelposition.y = 0.0;\r\n    }\r\n  }\r\n  // Q3: Fire (Bottom right)\r\n  else if (type == 2) {\r\n    //type = 2;\r\n    a = vec3(0.5);\r\n    b = vec3(0.5);\r\n    c = vec3(1.0, 1.0, 0.5);\r\n    d = vec3(0.8, 0.9, 0.3);\r\n  }\r\n  // Q4: Earth (Bottom left)\r\n  else if (type == 3) {\r\n    //type = 3;\r\n    a = vec3(0.35);\r\n    b = vec3(0.4, 0.2, 0.4);\r\n    c = vec3(1.0, 0.73, 0.68);\r\n    d = vec3(0.10, 0.25, 0.17);\r\n    modelposition.y *= 0.4;\r\n\r\n    if (fbm(modelposition.xyz) < 0.3) { \r\n      modelposition.y *= 0.3;\r\n    }\r\n  }\r\n  else {\r\n    //modelposition.y = 0.0;\r\n  }\r\n  return palette(t, a, b, c, d);\r\n}\r\n\r\nint getType(in vec3 pos) {\r\n  int type = 0;\r\n  // Q1: Air (Top left)\r\n  if (pos.x >= 0.0 && pos.z >= 0.0) {\r\n    type = 0;\r\n  }\r\n  // Q2: Water (Top right)\r\n  else if (pos.x < 0.0 && pos.z >= 0.0) {\r\n    type = 1;\r\n  }\r\n  // Q3: Fire (Bottom right)\r\n  else if (pos.x < 0.0 && pos.z < 0.0) {\r\n    type = 2;\r\n  }\r\n  // Q4: Earth (Bottom left)\r\n  else if (pos.x >= 0.0 && pos.z < 0.0) {\r\n    type = 3;\r\n  }\r\n  \r\n  return type;\r\n}\r\n\r\n// Start by assuming the four nations still live together in harmony\r\nvoid main()\r\n{\r\n  fs_Pos = vs_Pos.xyz + vs_Nor.xyz * fbm(vs_Pos.xyz);\r\n  fs_Col = vec4(fs_Pos, sqrt(fbm(vs_Nor.xyz) * fbm(fs_Pos.xyz)));\r\n\r\n  // fs_Sine = (sin((vs_Pos.x + u_PlanePos.x) * 0.1) + cos((vs_Pos.z + u_PlanePos.y) * 3.14159 * 0.1) + noise(vs_Pos.xyz)) * sqrt(noise(vec3(15.0, 10.0, 10.0) * noise(vs_Pos.xyz)));\r\n\r\n  // vec3 sineVec = vec3(sin(u_PlanePos.x), sin(u_PlanePos.y), cos(u_PlanePos.x + u_PlanePos.y));\r\n  // vec4 modelposition = vec4(vs_Pos.x, \r\n  //                           (fs_Sine + sqrt(fbm(vs_Pos.xyz))) * min(abs(u_PlanePos.x), 5.0) * 0.5, \r\n  //                           vs_Pos.z,\r\n  //                           1.0);\r\n\r\n  // if (modelposition.y < 1.5) {\r\n  //   modelposition.y = 0.0;\r\n  //   //fs_Col = vec4(0.0, 1.0, 0.0, 1.0);\r\n  // }\r\n  \r\n  vec4 modelposition = vec4(vs_Pos.xyz, 1.0);\r\n  vec2 noise = vec2(fbm(vs_Pos.xyz / 8.0));\r\n  float noise2 = fbm(vec3(noise, 3.4012394958) + vec3(1.1293123213, 121.23, 123213.33));\r\n  \r\n  float t = pattern(vs_Pos.xyz / 8.0);\r\n\r\n  int type = getType(vs_Pos.xyz);\r\n  vec4 leftPos = floor(vs_Pos);\r\n  vec4 rightPos = leftPos + vec4(1.0, 0.0, 1.0, 0.0);\r\n  vec4 dist = fract(vs_Pos);\r\n  int leftType = getType(leftPos.xyz);\r\n  int rightType = getType(rightPos.xyz);\r\n\r\n  if (leftType != rightType) {\r\n    if (t < 0.5) {\r\n      fs_Col = vec4(getColor(leftType, t, modelposition), 1.0);\r\n    }\r\n    else {\r\n      fs_Col = vec4(getColor(rightType, t, modelposition), 1.0);\r\n    }\r\n    modelposition.y *= 0.5 * smoothstep(leftPos.y, rightPos.y, dist.x);\r\n  }\r\n  else {\r\n    fs_Col = vec4(getColor(type, t, modelposition), 1.0);\r\n  }\r\n\r\n  // Water nation snowy islands\r\n  if (type == 1 && t > 0.2 && t < 0.35) { \r\n    fs_Col = vec4(1.0f);\r\n    modelposition.y += 0.2;\r\n  }\r\n  modelposition = u_Model * modelposition;\r\n  gl_Position = u_ViewProj * modelposition;\r\n}\r\n"
+module.exports = "#version 300 es\r\n\r\n\r\nuniform mat4 u_Model;\r\nuniform mat4 u_ModelInvTr;\r\nuniform mat4 u_ViewProj;\r\nuniform vec2 u_PlanePos; // Our location in the virtual world displayed by the plane\r\nuniform float u_Fire;\r\n\r\nin vec4 vs_Pos;\r\nin vec4 vs_Nor;\r\nin vec4 vs_Col;\r\n\r\nout vec3 fs_Pos;\r\nout vec4 fs_Nor;\r\nout vec4 fs_Col;\r\n\r\nout float fs_Sine;\r\n\r\n// From Mariano's github\r\nfloat hash3D(vec3 x) {\r\n\tfloat i = dot(x, vec3(123.4031, 46.5244876, 91.106168));\r\n\treturn fract(sin(i * 7.13) * 268573.103291);\r\n}\r\n\r\n// 3D noise\r\nfloat noise(vec3 p) {\r\n  vec3 bCorner = floor(p);\r\n  vec3 inCell = fract(p);\r\n\r\n  float bLL = hash3D(bCorner);\r\n  float bUL = hash3D(bCorner + vec3(0.0, 0.0, 1.0));\r\n  float bLR = hash3D(bCorner + vec3(0.0, 1.0, 0.0));\r\n  float bUR = hash3D(bCorner + vec3(0.0, 1.0, 1.0));\r\n  float b0 = mix(bLL, bUL, inCell.z);\r\n  float b1 = mix(bLR, bUR, inCell.z);\r\n  float b = mix(b0, b1, inCell.y);\r\n\r\n  vec3 fCorner = bCorner + vec3(1.0, 0.0, 0.0);\r\n  float fLL = hash3D(fCorner);\r\n  float fUL = hash3D(fCorner + vec3(0.0, 0.0, 1.0));\r\n  float fLR = hash3D(fCorner + vec3(0.0, 1.0, 0.0));\r\n  float fUR = hash3D(fCorner + vec3(0.0, 1.0, 1.0));\r\n  float f0 = mix(fLL, fUL, inCell.z);\r\n  float f1 = mix(fLR, fUR, inCell.z);\r\n  float f = mix(f0, f1, inCell.y);\r\n\r\n  return mix(b, f, inCell.x);\r\n}\r\n\r\nfloat fbm(vec3 q) {\r\n  float acc = 0.0;\r\n  float freqScale = 2.0;\r\n  float invScale = 1.0 / freqScale;\r\n  float freq = 1.0;\r\n  float amp = 1.0;\r\n\r\n  for (int i = 0; i < 5; ++i) {\r\n    freq *= freqScale;\r\n    amp *= invScale;\r\n    acc += noise(q * freq) * amp;\r\n  }\r\n  return acc;\r\n}\r\n\r\n// From IQ\r\n float pattern( in vec3 p ) {\r\n    vec3 q = vec3( fbm( p + vec3(0.0) ),\r\n                   fbm( p + vec3(5.2,1.3, 2.8) ),\r\n                   fbm( p + vec3(1.2, 3.4, 1.2)) );\r\n\r\n    return fbm( p + 4.0*q );\r\n }\r\n\r\n// From IQ\r\nvec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ) {\r\n    return a + b*cos( 6.28318*(c*t+d) );\r\n}\r\n\r\n// From Rachel's slides\r\nfloat bias(float b, float t) {\r\n  return pow(t, log(b) / log(0.5));\r\n}\r\n\r\n// Color in quadrants\r\nvec3 getColor(int type, float t, out vec4 modelposition) {\r\n  modelposition.y += pattern(vs_Pos.xyz / 8.0) * 10.0;\r\n  float defaultY = modelposition.y;\r\n\r\n  vec3 a, b, c, d;\r\n  vec4 heights;\r\n  if (type == 0) {\r\n    a = vec3(0.8);\r\n    b = vec3(0.2);\r\n    c = vec3(1.7, 0.0, 0.0);\r\n    d = vec3(0.0, 0.0, 0.94);\r\n    modelposition.y *= pow(abs(4.0 - modelposition.y * modelposition.y), 0.5) * 0.01 + 0.09 * fbm(vec3(modelposition.x, 0.0, modelposition.z));\r\n    heights[0] = modelposition.y;\r\n  }\r\n  // Q2: Water (Top right)\r\n  else if (type == 1) {\r\n    a = vec3(0.5);\r\n    b = vec3(0.5);\r\n    c = vec3(1.0);\r\n    d = vec3(0.0, 0.1, 0.2);\r\n    modelposition.y *= 4.0;\r\n    if (modelposition.y > 1.5) {\r\n      modelposition.y = 0.0;\r\n    }\r\n    heights[1] = modelposition.y;\r\n  }\r\n  // Q3: Fire (Bottom right)\r\n  else if (type == 2) {\r\n    a = vec3(0.5);\r\n    b = vec3(0.5);\r\n    c = vec3(1.0, 1.0, 0.5);\r\n    d = vec3(0.8, 0.9, 0.3);\r\n    heights[2] = modelposition.y;\r\n  }\r\n  // Q4: Earth (Bottom left)\r\n  else if (type == 3) {\r\n    a = vec3(0.35);\r\n    b = vec3(0.4, 0.2, 0.4);\r\n    c = vec3(1.0, 0.73, 0.68);\r\n    d = vec3(0.10, 0.25, 0.17);\r\n    modelposition.y *= 0.4;\r\n    if (fbm(modelposition.xyz) < 0.3) { \r\n      modelposition.y *= 0.3;\r\n    }\r\n    heights[3] = modelposition.y;\r\n  }\r\n  else {\r\n    //modelposition.y = 0.0;\r\n  }\r\n\r\n  float n = 10000.0;\r\n  if (abs(modelposition.x) <= n) {\r\n    float m = smoothstep(0.0, 1.0, abs(modelposition.x) / n);\r\n\r\n    modelposition.y = mix(heights[type], heights[(type + 1) % 4], bias(0.2, m));\r\n  }\r\n  if (abs(modelposition.z) <= n) {\r\n    float m = smoothstep(0.0, 1.0, abs(modelposition.z) / n);\r\n    modelposition.y = mix(heights[type], heights[(type + 1) % 4], bias(0.2, m));\r\n  }\r\n\r\n  // Recolor as the fire nation attacks\r\n  float u = u_Fire / 100.0;\r\n  u = smoothstep(0.0, 1.0, u_Fire / 100.0);\r\n\r\n  a = mix(a, vec3(0.5), u);\r\n  b = mix(b, vec3(0.5), u);\r\n  c = mix(c, vec3(1.0, 1.0, 0.5), u);\r\n  d = mix(d, vec3(0.8, 0.9, 0.3), u);\r\n  \r\n  modelposition.y = mix(modelposition.y, heights[2], u);\r\n\r\n  return palette(t, a, b, c, d);\r\n}\r\n\r\nint getType(in vec3 pos) {\r\n  int type = 0;\r\n  // Q1: Air (Top left)\r\n  if (pos.x >= 0.0 && pos.z >= 0.0) {\r\n    type = 0;\r\n    if (u_Fire > 25.0) {\r\n      type = 2;\r\n    }\r\n  }\r\n  // Q2: Water (Top right)\r\n  else if (pos.x < 0.0 && pos.z >= 0.0) {\r\n    type = 1;\r\n    if (u_Fire > 75.0) {\r\n      type = 2;\r\n    }\r\n  }\r\n  // Q3: Fire (Bottom right)\r\n  else if (pos.x < 0.0 && pos.z < 0.0) {\r\n    type = 2;\r\n  }\r\n  // Q4: Earth (Bottom left)\r\n  else if (pos.x >= 0.0 && pos.z < 0.0) {\r\n    type = 3;\r\n    if (u_Fire > 50.0) {\r\n      type = 2;\r\n    }\r\n  }\r\n  \r\n  return type;\r\n}\r\n\r\n// Start by assuming the four nations still live together in harmony...\r\nvoid main()\r\n{\r\n  fs_Pos = vs_Pos.xyz + vs_Nor.xyz * fbm(vs_Pos.xyz);\r\n  fs_Col = vec4(fs_Pos, sqrt(fbm(vs_Nor.xyz) * fbm(fs_Pos.xyz)));\r\n\r\n  // fs_Sine = (sin((vs_Pos.x + u_PlanePos.x) * 0.1) + cos((vs_Pos.z + u_PlanePos.y) * 3.14159 * 0.1) + noise(vs_Pos.xyz)) * sqrt(noise(vec3(15.0, 10.0, 10.0) * noise(vs_Pos.xyz)));\r\n\r\n  // vec3 sineVec = vec3(sin(u_PlanePos.x), sin(u_PlanePos.y), cos(u_PlanePos.x + u_PlanePos.y));\r\n  // vec4 modelposition = vec4(vs_Pos.x, \r\n  //                           (fs_Sine + sqrt(fbm(vs_Pos.xyz))) * min(abs(u_PlanePos.x), 5.0) * 0.5, \r\n  //                           vs_Pos.z,\r\n  //                           1.0);\r\n\r\n  // if (modelposition.y < 1.5) {\r\n  //   modelposition.y = 0.0;\r\n  //   //fs_Col = vec4(0.0, 1.0, 0.0, 1.0);\r\n  // }\r\n  \r\n  vec4 modelposition = vec4(vs_Pos.xyz, 1.0);\r\n  vec2 noise = vec2(fbm(vs_Pos.xyz / 8.0));\r\n  float noise2 = fbm(vec3(noise, 3.4012394958) + vec3(1.1293123213, 121.23, 123213.33));\r\n  \r\n  float t = pattern(vs_Pos.xyz / 8.0);\r\n\r\n  int type = getType(vs_Pos.xyz);\r\n  vec4 leftPos = floor(vs_Pos) - 0.2 * fbm(vec3(fbm(vec3(vs_Pos)))) * t;\r\n  vec4 rightPos = leftPos + vec4(1.0, 0.0, 1.0, 0.0) * -u_Fire * fbm(vec3(leftPos)) * t;\r\n  vec4 dist = fract(vs_Pos) * u_Fire;\r\n  int leftType = getType(leftPos.xyz);\r\n  int rightType = getType(rightPos.xyz);\r\n\r\n  if (leftType != rightType) {\r\n    if (t < 0.5) {\r\n      fs_Col = vec4(getColor(leftType, t, modelposition), 1.0);\r\n    }\r\n    else {\r\n      fs_Col = vec4(getColor(rightType, t, modelposition), 1.0);\r\n    }\r\n\r\n    if (leftType == 2 || rightType == 2) {\r\n      vec4 attack = vec4(1.0, 0.0, 1.0, 0.0) * u_Fire;\r\n      leftPos -= attack;\r\n      rightPos += attack;\r\n    }\r\n\r\n    modelposition.y *= 0.5 * smoothstep(leftPos.y, rightPos.y, dist.z);\r\n  }\r\n  else {\r\n    fs_Col = vec4(getColor(type, t, modelposition), 1.0);\r\n  }\r\n\r\n  // Water nation's snowy islands\r\n  if (type == 1 && t > 0.2 && t < 0.35) { \r\n    fs_Col = vec4(1.0f);\r\n    modelposition.y += 0.2;\r\n  }\r\n\r\n  modelposition = u_Model * modelposition;\r\n  gl_Position = u_ViewProj * modelposition;\r\n}\r\n"
 
 /***/ }),
 /* 70 */
 /***/ (function(module, exports) {
 
-module.exports = "#version 300 es\r\nprecision highp float;\r\n\r\nuniform vec2 u_PlanePos; // Our location in the virtual world displayed by the plane\r\n\r\nin vec3 fs_Pos;\r\nin vec4 fs_Nor;\r\nin vec4 fs_Col;\r\n\r\nin float fs_Sine;\r\n\r\nout vec4 out_Col; // This is the final output color that you will see on your\r\n                  // screen for the pixel that is currently being processed.\r\n\r\nvoid main()\r\n{\r\n    float t = clamp(smoothstep(40.0, 50.0, length(fs_Pos)), -1.0, 1.0); // Distance fog\r\n    out_Col = vec4(mix(vec3(0.8 * (fs_Col + 0.2)), vec3(164.0 / 255.0, 233.0 / 255.0, 1.0), t), 1.0);\r\n    // out_Col = vec4(mix(fs_Col, sin(u_PlanePos.x) * vec4(fs_Pos, 1.0), t));\r\n}\r\n"
+module.exports = "#version 300 es\r\nprecision highp float;\r\n\r\nuniform vec2 u_PlanePos; // Our location in the virtual world displayed by the plane\r\nuniform float u_Daytime;\r\n\r\nin vec3 fs_Pos;\r\nin vec4 fs_Nor;\r\nin vec4 fs_Col;\r\n\r\nin float fs_Sine;\r\n\r\nout vec4 out_Col; // This is the final output color that you will see on your\r\n                  // screen for the pixel that is currently being processed.\r\n\r\nvec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ) {\r\n    return a + b*cos( 6.28318*(c*t+d) );\r\n}\r\n\r\nvoid main()\r\n{\r\n    vec3 a = vec3(0.368, 0.748, 0.158);\r\n    vec3 b = vec3(0.358, 1.09, 0.428);\r\n    vec3 c = vec3(1.077, 0.36, 0.048);\r\n    vec3 d = vec3(0.965, 2.265, 0.848);\r\n    vec4 fogCol = mix(vec4(palette(u_Daytime / 23.0, a, b, c, d), 1.0), vec4(palette((u_Daytime + 2.0) / 25.0, a, b, c, d), 1.0), fs_Pos.y);\r\n\r\n    float t = clamp(smoothstep(40.0, 50.0, length(fs_Pos)), -1.0, 1.0); // Distance fog\r\n    out_Col = vec4(mix(vec3(0.8 * (fs_Col + 0.2)), vec3(fogCol.xyz), t), 1.0);\r\n}\r\n"
 
 /***/ }),
 /* 71 */
 /***/ (function(module, exports) {
 
-module.exports = "#version 300 es\r\nprecision highp float;\r\n\r\n// The vertex shader used to render the background of the scene\r\n\r\nin vec4 vs_Pos;\r\n\r\nvoid main() {\r\n  gl_Position = vs_Pos;\r\n}\r\n"
+module.exports = "#version 300 es\r\nprecision highp float;\r\n\r\n// The vertex shader used to render the background of the scene\r\n\r\nin vec4 vs_Pos;\r\nout vec4 fs_Pos;\r\n\r\nvoid main() {\r\n  fs_Pos = vs_Pos;\r\n  gl_Position = vs_Pos;\r\n}\r\n"
 
 /***/ }),
 /* 72 */
 /***/ (function(module, exports) {
 
-module.exports = "#version 300 es\r\nprecision highp float;\r\n\r\n// The fragment shader used to render the background of the scene\r\n// Modify this to make your background more interesting\r\n\r\nout vec4 out_Col;\r\n\r\nvoid main() {\r\n  out_Col = vec4(164.0 / 255.0, 233.0 / 255.0, 1.0, 1.0);\r\n  // out_Col = vec4(0.0, 0.0, 0.0, 1.0);\r\n}\r\n"
+module.exports = "#version 300 es\r\nprecision highp float;\r\n\r\n// The fragment shader used to render the background of the scene\r\n// Modify this to make your background more interesting\r\n\r\nuniform float u_Daytime;\r\nin vec4 fs_Pos;\r\nout vec4 out_Col;\r\n\r\nvec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ) {\r\n    return a + b*cos( 6.28318*(c*t+d) );\r\n}\r\n\r\nvoid main() {\r\n  out_Col = vec4(164.0 / 255.0, 233.0 / 255.0, 1.0, 1.0);\r\n  vec3 a = vec3(0.368, 0.748, 0.158);\r\n  vec3 b = vec3(0.358, 1.09, 0.428);\r\n  vec3 c = vec3(1.077, 0.36, 0.048);\r\n  vec3 d = vec3(0.965, 2.265, 0.848);\r\n  out_Col = mix(vec4(palette(u_Daytime / 23.0, a, b, c, d), 1.0), vec4(palette((u_Daytime + 2.0) / 25.0, a, b, c, d), 1.0), fs_Pos.y);\r\n}\r\n"
 
 /***/ })
 /******/ ]);

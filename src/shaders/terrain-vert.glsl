@@ -133,7 +133,7 @@ vec3 getColor(int type, float t, out vec4 modelposition) {
     //modelposition.y = 0.0;
   }
 
-  float n = 10000.5;
+  float n = 10000.0;
   if (abs(modelposition.x) <= n) {
     float m = smoothstep(0.0, 1.0, abs(modelposition.x) / n);
 

@@ -18,5 +18,5 @@ void main() {
   vec3 b = vec3(0.358, 1.09, 0.428);
   vec3 c = vec3(1.077, 0.36, 0.048);
   vec3 d = vec3(0.965, 2.265, 0.848);
-  out_Col = mix(vec4(palette(u_Daytime / 23.0, a, b, c, d), 1.0), vec4(palette((u_Daytime + 2.0) / 23.0, a, b, c, d), 1.0), fs_Pos.y);
+  out_Col = mix(vec4(palette(u_Daytime / 23.0, a, b, c, d), 1.0), vec4(palette((u_Daytime + 2.0) / 25.0, a, b, c, d), 1.0), fs_Pos.y);
 }
