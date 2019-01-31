@@ -58,3 +58,5 @@ Noise Help (IQ)
 Hash Function Source (Mariano Merchante)
 - https://github.com/mmerchante/playing-with-noise/blob/master/src/shaders/cloud.vert.glsl
 
+I also received help from Emily and Adam!
+
